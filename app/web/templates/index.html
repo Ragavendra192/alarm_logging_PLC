@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fault &amp; Alarm Analytics - {{ machine_id }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}?v=20260928_v5">
+</head>
+<body>
+
+    <!-- Header Navigation -->
+    <header class="app-header">
+        <div class="header-left">
+            <div class="brand-title">
+                <h1>FAULT &amp; ALARM ANALYTICS</h1>
+                <span class="machine-tag">{{ machine_id }}</span>
+            </div>
+            <!-- View Switcher Tabs -->
+            <div class="view-tabs">
+                <button class="view-tab-btn active" id="btnTabAlarms">Alarms &amp; Faults</button>
+                <button class="view-tab-btn" id="btnTabLiveIO">I/O Status (292 Tags)</button>
+                <button class="view-tab-btn" id="btnTabConfig">⚙️ Settings</button>
+            </div>
+            <!-- Live Status Indicators -->
+            <div class="status-indicator-group">
+                <button class="status-indicator-btn" id="btnPlcStatus" type="button" title="Siemens PLC Status (Click to test connection)">
+                    <span class="status-dot connected" id="plcStatusDot"></span>
+                    <span class="status-text" id="plcStatusText">PLC: Connected</span>
+                </button>
+                <button class="status-indicator-btn" id="btnSqlStatus" type="button" title="SQL Server Database Status (Click to test connection)">
+                    <span class="status-dot connected" id="sqlStatusDot"></span>
+                    <span class="status-text" id="sqlStatusText">SQL Server: Connected</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="header-right">
+            <div class="auto-refresh-control">
+                <label for="autoRefreshSelect">Auto Refresh:</label>
+                <select id="autoRefreshSelect" class="form-select">
+                    <option value="0">Off</option>
+                    <option value="5">5s</option>
+                    <option value="10" selected>10s</option>
+                    <option value="30">30s</option>
+                </select>
+            </div>
+            <button id="btnRefresh" class="btn btn-secondary" title="Refresh Data">
+                <span class="btn-icon">&#x21bb;</span> Refresh
+            </button>
+            <button id="btnExport" class="btn btn-primary" title="Export Filtered Alarms to CSV">
+                <span class="btn-icon">&#x2193;</span> Export CSV
+            </button>
+            <div class="last-updated" id="lastUpdatedText">Updated: Just now</div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="dashboard-container">
+
+        <!-- =============================================================== -->
+        <!-- VIEW 1: FAULT & ALARM LOG                                       -->
+        <!-- =============================================================== -->
+        <div id="viewAlarmsLog" class="view-section">
+
+            <!-- Filter Controls Toolbar -->
+            <section class="filter-toolbar">
+                <div class="filter-group">
+                    <label for="filterDatePreset">Date Range:</label>
+                    <select id="filterDatePreset" class="form-select">
+                        <option value="all" selected>All Time</option>
+                        <option value="today">Today</option>
+                        <option value="yesterday">Yesterday</option>
+                        <option value="7days">Last 7 Days</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                </div>
+
+                <div class="filter-group custom-date-group hidden" id="customDateGroup">
+                    <input type="datetime-local" id="filterDateFrom" class="form-input" placeholder="From">
+                    <span class="date-sep">to</span>
+                    <input type="datetime-local" id="filterDateTo" class="form-input" placeholder="To">
+                </div>
+
+                <div class="filter-group search-group">
+
+                    <label for="filterSearch">Search:</label>
+                    <input type="text" id="filterSearch" class="form-input" placeholder="Search alarm, operator, code...">
+                </div>
+
+                <div class="filter-actions">
+                    <button id="btnResetFilters" class="btn btn-secondary" title="Reset all filters">Reset</button>
+                </div>
+            </section>
+
+            <!-- Fault Log Table Section -->
+            <section class="table-section">
+                <div class="table-responsive">
+                    <table class="data-table" id="alarmsTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px; text-align: center;">Compare</th>
+                                <th style="width: 70px;"># ID</th>
+                                <th style="width: 210px;">Timestamp</th>
+                                <th style="width: 130px;">Station</th>
+                                <th>Fault / Alarm Description</th>
+                                <th style="width: 140px;">Operator</th>
+                                <th style="width: 110px;">Shift</th>
+                                <th style="width: 100px; text-align: center;">View</th>
+                            </tr>
+                        </thead>
+                        <tbody id="alarmsTableBody">
+                            <tr>
+                                <td colspan="8" class="empty-state">Loading alarm records...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Table Pagination -->
+                <div class="pagination-container">
+                    <button id="btnPrevPage" class="btn btn-secondary" disabled>&larr; Previous</button>
+                    <span class="page-info" id="pageInfo">Page 1 of 1</span>
+                    <button id="btnNextPage" class="btn btn-secondary" disabled>Next &rarr;</button>
+                </div>
+            </section>
+        </div>
+
+        <!-- =============================================================== -->
+        <!-- VIEW 2: SEPARATE I/O STATUS TABLE                               -->
+        <!-- =============================================================== -->
+        <div id="viewIOStatus" class="view-section hidden">
+            <section class="table-section">
+                <div class="table-header-row">
+                    <div class="table-title">
+                        <h2>PLC I/O STATUS LIST (292 TAGS)</h2>
+                        <span class="record-counter" id="ioActiveSummary">Active: -- / 292</span>
+                    </div>
+                    <!-- I/O Filter Toolbar -->
+                    <div class="io-toolbar">
+                        <div class="io-filter-pills">
+                            <button class="pill-btn active" data-filter="all" id="pillIOAll">All (292)</button>
+                            <button class="pill-btn" data-filter="active" id="pillIOActive">Active [1] Only</button>
+                            <button class="pill-btn" data-filter="inactive" id="pillIOInactive">Inactive [0]</button>
+                        </div>
+                        <input type="text" id="inputSearchIO" class="form-input" placeholder="Search address or tag name..." style="width: 260px;">
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="data-table" id="ioStatusTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 70px;">#</th>
+                                <th style="width: 110px;">PLC Address</th>
+                                <th style="width: 320px;">Tag Name</th>
+                                <th>Comment / Signal Description</th>
+                                <th style="width: 110px; text-align: center;">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ioStatusTableBody">
+                            <tr>
+                                <td colspan="5" class="empty-state">Loading I/O status...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <!-- =============================================================== -->
+        <!-- VIEW 3: SYSTEM & NETWORK CONFIGURATION                          -->
+        <!-- =============================================================== -->
+        <div id="viewConfig" class="view-section hidden">
+            <section class="config-container">
+                <div class="config-header">
+                    <h2>COMMUNICATION &amp; DATABASE CONFIGURATION</h2>
+                    <p class="config-subtitle">Configure Siemens PLC connection parameters and SQL Server (SSMS) target host.</p>
+                </div>
+
+                <!-- Live Status Banner / Notification -->
+                <div id="configAlertBox" class="config-alert hidden"></div>
+
+                <div class="config-cards-grid">
+                    <!-- CARD 1: SIEMENS PLC COMMUNICATION -->
+                    <div class="config-card">
+                        <div class="config-card-header">
+                            <div class="config-card-icon">⚡</div>
+                            <div>
+                                <h3>Siemens PLC Connection</h3>
+                                <p>S7 Communication parameters for physical machine controller</p>
+                            </div>
+                        </div>
+                        <div class="config-card-body">
+                            <div class="form-row">
+                                <div class="form-field full-width">
+                                    <label for="cfgPlcIp">PLC IP Address:</label>
+                                    <input type="text" id="cfgPlcIp" class="form-input" placeholder="192.168.50.11">
+                                    <span class="field-hint">Factory network IP address of the Siemens S7 PLC</span>
+                                </div>
+                            </div>
+                            <div class="form-row two-col">
+                                <div class="form-field">
+                                    <label for="cfgPlcRack">Rack:</label>
+                                    <input type="number" id="cfgPlcRack" class="form-input" min="0" max="7" value="0">
+                                </div>
+                                <div class="form-field">
+                                    <label for="cfgPlcSlot">Slot:</label>
+                                    <input type="number" id="cfgPlcSlot" class="form-input" min="0" max="31" value="1">
+                                </div>
+                            </div>
+                            <div class="form-row two-col">
+                                <div class="form-field">
+                                    <label for="cfgPlcDbNumber">I/O Data Block (DB):</label>
+                                    <input type="number" id="cfgPlcDbNumber" class="form-input" value="1000">
+                                </div>
+                                <div class="form-field">
+                                    <label for="cfgPlcAlarmDb">Alarm Data Block (DB):</label>
+                                    <input type="number" id="cfgPlcAlarmDb" class="form-input" value="101">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="config-card-footer">
+                            <button type="button" id="btnTestPLC" class="btn btn-secondary">
+                                <span class="btn-icon">⚡</span> Test PLC Connection
+                            </button>
+                            <span id="plcTestBadge" class="test-badge hidden"></span>
+                        </div>
+                    </div>
+
+                    <!-- CARD 2: SQL SERVER / SSMS SETTINGS -->
+                    <div class="config-card">
+                        <div class="config-card-header">
+                            <div class="config-card-icon">🗄️</div>
+                            <div>
+                                <h3>SQL Server (SSMS) Host</h3>
+                                <p>Database connection parameters for continuous logging &amp; analytics</p>
+                            </div>
+                        </div>
+                        <div class="config-card-body">
+                            <div class="form-row">
+                                <div class="form-field full-width">
+                                    <label for="cfgSqlServer">Server Host / Instance Name:</label>
+                                    <input type="text" id="cfgSqlServer" class="form-input" placeholder="localhost\SQLEXPRESS or IP">
+                                    <span class="field-hint">Instance name or IP (e.g. localhost\SQLEXPRESS or 192.168.1.50\SQLEXPRESS)</span>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-field full-width">
+                                    <label for="cfgSqlDatabase">Database Name:</label>
+                                    <input type="text" id="cfgSqlDatabase" class="form-input" value="HydraulicMachineDB">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-field full-width checkbox-field">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="cfgSqlTrusted" checked>
+                                        <span>Windows Authentication (Trusted Connection)</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div id="sqlCredentialsGroup" class="form-row two-col hidden">
+                                <div class="form-field">
+                                    <label for="cfgSqlUser">SQL Username:</label>
+                                    <input type="text" id="cfgSqlUser" class="form-input" placeholder="sa">
+                                </div>
+                                <div class="form-field">
+                                    <label for="cfgSqlPassword">SQL Password:</label>
+                                    <input type="password" id="cfgSqlPassword" class="form-input" placeholder="••••••••">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="config-card-footer">
+                            <button type="button" id="btnTestSQL" class="btn btn-secondary">
+                                <span class="btn-icon">🗄️</span> Test SQL Connection
+                            </button>
+                            <span id="sqlTestBadge" class="test-badge hidden"></span>
+                        </div>
+                    </div>
+
+                    <!-- CARD 3: MACHINE IDENTITY & ACTIONS -->
+                    <div class="config-card full-width-card">
+                        <div class="config-card-header">
+                            <div class="config-card-icon">⚙️</div>
+                            <div>
+                                <h3>Machine Identification &amp; Apply Changes</h3>
+                                <p>Save settings to environment configuration and update background services</p>
+                            </div>
+                        </div>
+                        <div class="config-card-body">
+                            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px;">
+                                <div class="form-field">
+                                    <label for="cfgMachineId">Machine Identifier:</label>
+                                    <input type="text" id="cfgMachineId" class="form-input" value="3_station">
+                                </div>
+                                <div class="form-field">
+                                    <label for="cfgOperatorName">Operator Name:</label>
+                                    <input type="text" id="cfgOperatorName" class="form-input" value="Operator_1">
+                                </div>
+                                <div class="form-field">
+                                    <label for="cfgWebPort">Web Dashboard Port:</label>
+                                    <input type="number" id="cfgWebPort" class="form-input" value="5001" min="1024" max="65535">
+                                </div>
+                            </div>
+
+                        </div>
+                        <div class="config-card-footer action-bar">
+                            <div class="action-buttons">
+                                <button type="button" id="btnSaveConfig" class="btn btn-primary">
+                                    <span class="btn-icon">💾</span> Save Configuration
+                                </button>
+                                <button type="button" id="btnSaveAndRestart" class="btn btn-accent">
+                                    <span class="btn-icon">🔄</span> Save &amp; Restart Service
+                                </button>
+                            </div>
+                            <span class="action-hint">Settings are saved to <code>.env</code>. Restarting the service ensures immediate connection to new IP/Host.</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+    </main>
+
+    <!-- =============================================================== -->
+    <!-- MACHINE FREEZE-FRAME DRILLDOWN MODAL (P1/P2/P3 SPLIT LAYOUT)   -->
+    <!-- =============================================================== -->
+    <div class="modal-backdrop hidden" id="snapshotModal">
+        <div class="modal-dialog modal-full-fit">
+            <!-- Modal Header -->
+            <div class="modal-header">
+                <div class="modal-header-info">
+                    <div class="modal-title-row">
+                        <span class="modal-badge-fault" id="modalFaultBadge">FAULT</span>
+                        <h3 id="modalAlarmTitle">Machine Freeze-Frame Snapshot</h3>
+                    </div>
+                    <div class="modal-meta-row">
+                        <span class="modal-timestamp" id="modalAlarmTimestamp">--</span>
+                        <span class="modal-meta-divider">|</span>
+                        <span class="modal-station-tag" id="modalStationTag">Station: --</span>
+                    </div>
+                </div>
+                <button class="modal-close-btn" id="modalCloseBtn" title="Close Snapshot">&times;</button>
+            </div>
+
+            <!-- Station Selector Tabs (P1, P2, P3, Common) -->
+            <div class="modal-station-nav">
+                <div class="station-tab-group" id="modalStationTabs">
+                    <button class="station-tab-btn p1" data-station="P1" id="tabStationP1">
+                        <span class="station-tab-indicator"></span>
+                        <span class="station-tab-label">Press 1 (P1)</span>
+                        <span class="station-tab-badge" id="badgeP1Trips">0 Trips</span>
+                    </button>
+                    <button class="station-tab-btn p2 active" data-station="P2" id="tabStationP2">
+                        <span class="station-tab-indicator"></span>
+                        <span class="station-tab-label">Press 2 (P2)</span>
+                        <span class="station-tab-badge" id="badgeP2Trips">0 Trips</span>
+                    </button>
+                    <button class="station-tab-btn p3" data-station="P3" id="tabStationP3">
+                        <span class="station-tab-indicator"></span>
+                        <span class="station-tab-label">Press 3 (P3)</span>
+                        <span class="station-tab-badge" id="badgeP3Trips">0 Trips</span>
+                    </button>
+                    <button class="station-tab-btn common" data-station="Common" id="tabStationCommon">
+                        <span class="station-tab-indicator"></span>
+                        <span class="station-tab-label">Common &amp; Aux I/O</span>
+                        <span class="station-tab-badge" id="badgeCommonTrips">0 Trips</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Body: Split Pane Container -->
+            <div class="modal-split-container">
+                <!-- LEFT PANEL: Actuals (Parameters) -->
+                <aside class="modal-panel-left" id="modalLeftPanel">
+                    <!-- Parameters Container (Rendered dynamically) -->
+                    <div class="station-parameters-wrapper" id="stationParametersContent">
+                        <div class="loading-state">Loading parameters...</div>
+                    </div>
+                </aside>
+
+                <!-- RIGHT PANEL: I/O List & Full-Fit Search -->
+                <section class="modal-panel-right" id="modalRightPanel">
+                    <!-- Full-Width Controls & Search Bar -->
+                    <div class="modal-io-search-toolbar">
+                        <div class="io-search-wrapper">
+                            <span class="search-icon">&#128269;</span>
+                            <input type="text" id="modalSearchIO" class="modal-search-input" 
+                                   placeholder="Search address (e.g. 12.7) or signal name / description..." autocomplete="off">
+                            <button class="search-clear-btn hidden" id="modalSearchClear" title="Clear search">&times;</button>
+                        </div>
+
+                        <div class="io-toolbar-filters">
+                            <div class="io-filter-pills">
+                                <button class="pill-btn active" id="modalPillAll">All (<span id="countPillAll">--</span>)</button>
+                                <button class="pill-btn" id="modalPillActive">Active [1] (<span id="countPillActive">--</span>)</button>
+                                <button class="pill-btn" id="modalPillInactive">Inactive [0] (<span id="countPillInactive">--</span>)</button>
+                            </div>
+
+                            <div class="io-scope-switch">
+                                <label class="scope-toggle-label" for="modalScopeSelect">Scope:</label>
+                                <select id="modalScopeSelect" class="form-select scope-select">
+                                    <option value="station" selected>This Press Only</option>
+                                    <option value="all">All 292 Tags</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Side I/O Status Table with Sticky Header -->
+                    <div class="modal-io-table-container">
+                        <table class="modal-data-table" id="modalIOTable">
+                            <thead>
+                                <tr>
+                                    <th style="width: 85px;">Address</th>
+                                    <th style="width: 280px;">Tag Name</th>
+                                    <th>Signal Description</th>
+                                    <th style="width: 95px; text-align: center;">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modalIOTableBody">
+                                <tr><td colspan="4" class="empty-state">Loading I/O status...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="modal-footer">
+                <div class="modal-footer-status">
+                    <span id="modalFooterSummary">Showing Press Parameters &amp; I/O Signals</span>
+                </div>
+                <button class="btn btn-secondary" id="modalDismissBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =============================================================== -->
+    <!-- FLOATING COMPARISON DOCK (E-COMMERCE STYLE)                    -->
+    <!-- =============================================================== -->
+    <div class="compare-dock hidden" id="compareDock">
+        <div class="compare-dock-content">
+            <div class="compare-dock-left">
+                <div class="compare-dock-info">
+                    <span class="compare-dock-title">Compare Alarms</span>
+                    <span class="compare-dock-subtitle" id="compareCountText">0 of 4 selected</span>
+                </div>
+                <div class="compare-chips-list" id="compareChipsList">
+                    <!-- Populated dynamically with selected alarm tags -->
+                </div>
+            </div>
+            <div class="compare-dock-actions">
+                <button class="btn btn-secondary btn-sm" id="btnClearCompare">Clear</button>
+                <button class="btn btn-primary btn-sm" id="btnLaunchCompare">
+                    <span>Compare Now</span> &rarr;
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =============================================================== -->
+    <!-- SIDE-BY-SIDE ALARM COMPARISON MODAL                            -->
+    <!-- =============================================================== -->
+    <div class="modal-backdrop hidden" id="compareModal">
+        <div class="modal-dialog modal-full-fit compare-matrix-dialog">
+            <!-- Modal Header -->
+            <div class="modal-header">
+                <div class="modal-header-info">
+                    <div class="modal-title-row">
+                        <span class="compare-badge">SIDE-BY-SIDE COMPARISON</span>
+                        <h3 id="compareModalTitle">Alarm Parameter &amp; Sensor Comparison</h3>
+                    </div>
+                    <div class="modal-meta-row" id="compareModalMeta">
+                        Comparing selected machine freeze-frames
+                    </div>
+                </div>
+                <button class="modal-close-btn" id="compareCloseBtn" title="Close Comparison">&times;</button>
+            </div>
+
+            <!-- Station Selector Tabs -->
+            <div class="modal-station-nav">
+                <div class="station-tab-group" id="compareStationTabs">
+                    <button class="station-tab-btn active" data-tab="p1" id="cmpTabP1">
+                        <span class="station-tab-indicator" style="background-color: #38bdf8;"></span>
+                        <span>Press 1 (P1)</span>
+                    </button>
+                    <button class="station-tab-btn" data-tab="p2" id="cmpTabP2">
+                        <span class="station-tab-indicator" style="background-color: #10b981;"></span>
+                        <span>Press 2 (P2)</span>
+                    </button>
+                    <button class="station-tab-btn" data-tab="p3" id="cmpTabP3">
+                        <span class="station-tab-indicator" style="background-color: #a855f7;"></span>
+                        <span>Press 3 (P3)</span>
+                    </button>
+                    <button class="station-tab-btn" data-tab="io" id="cmpTabIO">
+                        <span class="station-tab-indicator" style="background-color: #f59e0b;"></span>
+                        <span>Digital I/O Divergence</span>
+                    </button>
+                    <button class="station-tab-btn" data-tab="meta" id="cmpTabMeta">
+                        <span class="station-tab-indicator" style="background-color: #94a3b8;"></span>
+                        <span>Event Overview</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Matrix Filter Toolbar -->
+            <div class="compare-toolbar">
+                <div class="compare-filters-left">
+                    <label class="toggle-checkbox-label" for="chkHighlightDiffs">
+                        <input type="checkbox" id="chkHighlightDiffs" checked>
+                        <span>Highlight Differences</span>
+                    </label>
+                    <label class="toggle-checkbox-label" for="chkDiffsOnly">
+                        <input type="checkbox" id="chkDiffsOnly">
+                        <span>Show Differences Only</span>
+                    </label>
+                </div>
+                <div class="compare-filters-right">
+                    <input type="text" id="compareSearchInput" class="form-input" placeholder="Filter parameters or signals..." style="width: 280px;">
+                </div>
+            </div>
+
+            <!-- Matrix Body Container -->
+            <div class="compare-matrix-container" id="compareMatrixContainer">
+                <div class="loading-state">Select alarms and click Compare to view matrix.</div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="modal-footer">
+                <div class="modal-footer-status">
+                    <span id="compareFooterStatus">Select 2 to 4 alarms to compare parameters and sensor states</span>
+                </div>
+                <button class="btn btn-secondary" id="compareDismissBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script -->
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
