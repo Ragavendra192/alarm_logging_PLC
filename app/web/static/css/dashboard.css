@@ -979,6 +979,48 @@ body {
     color: #38bdf8;
 }
 
+/* IO Tag Badges with Color Variation */
+.tag-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: var(--font-mono, Consolas, monospace);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    line-height: 1.4;
+    transition: all 0.15s ease;
+}
+
+/* Input Tag Badge (Cyan / Electric Blue) */
+.tag-badge-i {
+    background-color: rgba(56, 189, 248, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.38);
+    color: #38bdf8;
+}
+
+.tag-badge-i .badge-type {
+    font-weight: 800;
+    color: #7dd3fc;
+    margin-right: 3px;
+}
+
+/* Output Tag Badge (Vibrant Amber / Orange) */
+.tag-badge-q {
+    background-color: rgba(245, 158, 11, 0.14);
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    color: #fbbf24;
+}
+
+.tag-badge-q .badge-type {
+    font-weight: 800;
+    color: #fde68a;
+    margin-right: 3px;
+}
+
 .tag-name {
     font-family: var(--font-mono);
     color: var(--text-primary);

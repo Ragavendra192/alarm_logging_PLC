@@ -718,6 +718,48 @@
         renderLiveIOTable();
     }
 
+    // Helper to determine tag I/O type and formatted address
+    function getTagIOInfo(tagOrAddr) {
+        if (!tagOrAddr) return { type: "I", addr: "", formatted: "I" };
+        let addr = typeof tagOrAddr === "string" ? tagOrAddr : (tagOrAddr.address || "");
+        let ioType = typeof tagOrAddr === "object" ? tagOrAddr.io_type : null;
+
+        // Strip any existing brackets
+        addr = addr.replace(/[\[\]]/g, "").trim();
+
+        if (!ioType) {
+            const uAddr = addr.toUpperCase();
+            const uName = (typeof tagOrAddr === "object" ? tagOrAddr.name || "" : "").toUpperCase();
+            const uComment = (typeof tagOrAddr === "object" ? tagOrAddr.comment || "" : "").toUpperCase();
+
+            if (uAddr.startsWith("Q") || uName.startsWith("Q ") || uName.startsWith("Q_") ||
+                uName.includes("OUTPUT") || uComment.includes("OUTPUT") ||
+                uName.includes("SOLENOID") || uName.includes("VALVE COIL") ||
+                uName.includes("LAMP") || uName.includes("BUZZER") || uName.includes("SIREN")) {
+                ioType = "Q";
+            } else {
+                ioType = "I";
+            }
+        }
+
+        // Clean out prefix from addr if it had I or Q already
+        if (addr.startsWith("I") || addr.startsWith("Q") || addr.startsWith("i") || addr.startsWith("q")) {
+            addr = addr.substring(1).trim();
+        }
+
+        return {
+            type: ioType,
+            addr: addr,
+            formatted: `${ioType} ${addr}`
+        };
+    }
+
+    function renderIOAddressBadge(tagOrAddr) {
+        const info = getTagIOInfo(tagOrAddr);
+        const badgeClass = info.type === "Q" ? "tag-badge-q" : "tag-badge-i";
+        return `<span class="tag-badge ${badgeClass}"><span class="badge-type">${info.type}</span>${escapeHtml(info.addr)}</span>`;
+    }
+
     function renderLiveIOTable() {
         if (!state.liveIO.data || !state.liveIO.data.io_status) return;
 
@@ -737,11 +779,18 @@
 
         // Text Search
         if (state.liveIO.search) {
-            filtered = filtered.filter(t =>
-                t.address.toLowerCase().includes(state.liveIO.search) ||
-                t.name.toLowerCase().includes(state.liveIO.search) ||
-                (t.comment && t.comment.toLowerCase().includes(state.liveIO.search))
-            );
+            const q = state.liveIO.search.trim().toLowerCase();
+            filtered = filtered.filter(t => {
+                const info = getTagIOInfo(t);
+                const addr = (t.address || "").toLowerCase();
+                const name = (t.name || "").toLowerCase();
+                const comment = (t.comment || "").toLowerCase();
+                return addr.includes(q) ||
+                       info.formatted.toLowerCase().includes(q) ||
+                       `${info.type}${info.addr}`.toLowerCase().includes(q) ||
+                       name.includes(q) ||
+                       comment.includes(q);
+            });
         }
 
         if (filtered.length === 0) {
@@ -758,7 +807,7 @@
             html += `
                 <tr>
                     <td class="table-id">${idx + 1}</td>
-                    <td><span class="tag-address">[${t.address}]</span></td>
+                    <td>${renderIOAddressBadge(t)}</td>
                     <td class="tag-name">${escapeHtml(t.name)}</td>
                     <td class="tag-comment">${escapeHtml(t.comment || "-")}</td>
                     <td style="text-align: center;">${statusBadge}</td>
@@ -1038,13 +1087,19 @@
         }
 
         // Filter by Search Query
-        const q = state.modalSnapshot.ioSearch;
+        const q = state.modalSnapshot.ioSearch.trim().toLowerCase();
         if (q) {
-            filtered = filtered.filter(t =>
-                t.address.toLowerCase().includes(q) ||
-                t.name.toLowerCase().includes(q) ||
-                (t.comment && t.comment.toLowerCase().includes(q))
-            );
+            filtered = filtered.filter(t => {
+                const info = getTagIOInfo(t);
+                const addr = (t.address || "").toLowerCase();
+                const name = (t.name || "").toLowerCase();
+                const comment = (t.comment || "").toLowerCase();
+                return addr.includes(q) ||
+                       info.formatted.toLowerCase().includes(q) ||
+                       `${info.type}${info.addr}`.toLowerCase().includes(q) ||
+                       name.includes(q) ||
+                       comment.includes(q);
+            });
         }
 
         if (filtered.length === 0) {
@@ -1060,7 +1115,7 @@
 
             html += `
                 <tr>
-                    <td><span class="tag-address">[${t.address}]</span></td>
+                    <td>${renderIOAddressBadge(t)}</td>
                     <td class="tag-name">${escapeHtml(t.name)}</td>
                     <td class="tag-comment">${escapeHtml(t.comment || "-")}</td>
                     <td style="text-align: center;">${statusBadge}</td>
@@ -1694,8 +1749,8 @@
             rowsHtml += `
                 <tr class="${rowClass}">
                     <td class="compare-param-col">
-                        <span class="tag-address">[${addr}]</span>
-                        <div style="font-size: 11px; color: var(--text-primary);">${escapeHtml(meta.name)}</div>
+                        ${renderIOAddressBadge({ address: addr, name: meta.name, comment: meta.comment, io_type: meta.io_type })}
+                        <div style="font-size: 11px; color: var(--text-primary); margin-top: 2px;">${escapeHtml(meta.name)}</div>
                         <div style="font-size: 10px; color: var(--text-muted);">${escapeHtml(meta.comment)}</div>
                     </td>
                     ${valCells}

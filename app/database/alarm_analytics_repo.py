@@ -361,11 +361,15 @@ def get_alarm_detail(alarm_id: int, source_table: str = "AlarmResponse") -> dict
                     active_io_count += 1
                     active_trips.append(addr)
                 tag_meta = PLC_TAGS.get(addr, {})
+                io_type = tag_meta.get("io_type")
+                if not io_type:
+                    io_type = "Q" if (addr.startswith("Q") or "OUTPUT" in tag_meta.get("name", "").upper()) else "I"
                 io_list.append({
                     "address": addr,
                     "name": tag_meta.get("name", f"Tag_{addr}"),
                     "comment": tag_meta.get("comment", ""),
-                    "status": bit_val
+                    "status": bit_val,
+                    "io_type": io_type
                 })
 
             return {
@@ -413,11 +417,15 @@ def get_latest_machine_io() -> dict[str, Any] | None:
                 if bit_val:
                     active_count += 1
                 tag_meta = PLC_TAGS.get(addr, {})
+                io_type = tag_meta.get("io_type")
+                if not io_type:
+                    io_type = "Q" if (addr.startswith("Q") or "OUTPUT" in tag_meta.get("name", "").upper()) else "I"
                 io_list.append({
                     "address": addr,
                     "name": tag_meta.get("name", f"Tag_{addr}"),
                     "comment": tag_meta.get("comment", ""),
-                    "status": bit_val
+                    "status": bit_val,
+                    "io_type": io_type
                 })
 
             return {
