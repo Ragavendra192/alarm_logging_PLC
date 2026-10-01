@@ -750,14 +750,14 @@
         return {
             type: ioType,
             addr: addr,
-            formatted: `${ioType} ${addr}`
+            formatted: `[${ioType}${addr}]`
         };
     }
 
     function renderIOAddressBadge(tagOrAddr) {
         const info = getTagIOInfo(tagOrAddr);
         const badgeClass = info.type === "Q" ? "tag-badge-q" : "tag-badge-i";
-        return `<span class="tag-badge ${badgeClass}"><span class="badge-type">${info.type}</span>${escapeHtml(info.addr)}</span>`;
+        return `<span class="tag-badge ${badgeClass}">[<span class="badge-type">${info.type}</span>${escapeHtml(info.addr)}]</span>`;
     }
 
     function renderLiveIOTable() {
